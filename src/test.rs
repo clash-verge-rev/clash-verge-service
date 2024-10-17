@@ -1,3 +1,5 @@
+use anyhow::Error;
+
 #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn main() {
     panic!("This program is not intended to run on this platform.");
@@ -5,7 +7,6 @@ fn main() {
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Error> {
-    use anyhow::Error;
     use std::process::Command as StdCommand;
     use users::get_effective_uid;
 
@@ -75,4 +76,6 @@ fn linux_elevator() -> &'static str {
     }
 }
 
-fn main() {}
+fn main() -> Result<(), Error> {
+    Ok(())
+}
