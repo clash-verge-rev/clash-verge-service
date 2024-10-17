@@ -1,7 +1,8 @@
+#[allow(unused_imports)]
 use anyhow::Error;
 
 #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
-fn main() {
+fn main() -> Result<(), Error> {
     panic!("This program is not intended to run on this platform.");
 }
 
@@ -74,8 +75,4 @@ fn linux_elevator() -> &'static str {
         }
         Err(_) => "sudo",
     }
-}
-
-fn main() -> Result<(), Error> {
-    Ok(())
 }
