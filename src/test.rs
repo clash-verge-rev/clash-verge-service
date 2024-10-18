@@ -32,20 +32,18 @@ fn main() -> Result<(), Error> {
     let install_shell: String = install_path.to_string_lossy().replace(" ", "\\ ");
     let uninstall_shell: String = uninstall_path.to_string_lossy().replace(" ", "\\ ");
 
-    let elevator = linux_elevator();
     let _ = match get_effective_uid() {
         0 => StdCommand::new(uninstall_path).status()?,
-        _ => StdCommand::new(elevator)
+        _ => StdCommand::new("sudo")
             .arg("sh")
             .arg("-c")
             .arg(uninstall_shell)
             .status()?,
     };
 
-    let elevator = linux_elevator();
     let status = match get_effective_uid() {
         0 => StdCommand::new(install_shell).status()?,
-        _ => StdCommand::new(elevator)
+        _ => StdCommand::new("sudo")
             .arg("sh")
             .arg("-c")
             .arg(install_shell)
@@ -76,3 +74,9 @@ fn linux_elevator() -> &'static str {
         Err(_) => "sudo",
     }
 }
+
+#[cfg(target_os = "macos")]
+fn main() {}
+
+#[cfg(target_os = "windows")]
+fn main() {}
