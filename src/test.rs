@@ -60,21 +60,6 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-#[cfg(target_os = "linux")]
-fn linux_elevator() -> &'static str {
-    use std::process::Command;
-    match Command::new("which").arg("pkexec").output() {
-        Ok(output) => {
-            if output.stdout.is_empty() {
-                "sudo"
-            } else {
-                "pkexec"
-            }
-        }
-        Err(_) => "sudo",
-    }
-}
-
 #[cfg(target_os = "macos")]
 fn main() {}
 
