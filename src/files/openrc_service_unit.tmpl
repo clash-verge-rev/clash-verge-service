@@ -1,0 +1,20 @@
+#!/sbin/openrc-run
+# Copyright 2024 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+pidfile="/run/${RCNAME}.pid"
+command="{SERVICE-BIN}"
+command_background="yes"
+
+capabilities="^cap_net_bind_service,^cap_net_admin,^cap_net_raw"
+output_log="/var/log/${RCNAME}.log"
+error_log="/var/log/${RCNAME}.log"
+
+depend() {
+    need net
+    after local
+}
+
+start_pre() {
+    checkpath -f -m 0644 "$output_log"
+}
