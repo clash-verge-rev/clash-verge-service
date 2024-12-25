@@ -4,8 +4,14 @@
     <dict>
         <key>Label</key>
         <string>io.github.clashverge.helper</string>
+        <key>CFBundleIdentifier</key>
+        <string>io.github.clashverge.helper</string>
+        <key>CFBundleName</key>
+        <string>Clash Verge Helper</string>
         <key>CFBundleDisplayName</key>
         <string>Clash Verge Helper</string>
+        <key>ProcessType</key>
+        <string>Background</string>
         <key>MachServices</key>
         <dict>
             <key>io.github.clashverge.helper</key>
