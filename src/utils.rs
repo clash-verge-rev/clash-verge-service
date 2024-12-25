@@ -1,5 +1,16 @@
 use anyhow::Error;
 
+#[cfg(target_os = "linux")]
+pub fn get_init_system() -> Option<crate::InitSystem> {
+    use crate::InitSystem;
+
+    std::fs::read_to_string("/proc/1/comm").map_or(None, |init_name| match init_name.trim() {
+        "systemd" => Some(InitSystem::Systemd),
+        "init" => Some(InitSystem::OpenRC),
+        _ => None,
+    })
+}
+
 pub fn run_command(cmd: &str, args: &[&str], debug: bool) -> Result<(), Error> {
     if debug {
         println!("┌─────────────────────────────────────────");

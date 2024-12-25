@@ -80,13 +80,13 @@ fn main() -> Result<(), Error> {
 
     Ok(())
 }
+
+#[cfg(target_os = "linux")]
+const SERVICE_NAME: &str = "clash-verge-service";
+
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Error> {
-    const SERVICE_NAME: &str = "clash-verge-service";
-    use clash_verge_service::utils::run_command;
-    use std::fs::File;
-    use std::io::Write;
-    use std::path::Path;
+    use clash_verge_service::{utils::get_init_system, InitSystem};
 
     let debug = env::args().any(|arg| arg == "--debug");
 
@@ -97,17 +97,36 @@ fn main() -> Result<(), Error> {
     if !service_binary_path.exists() {
         return Err(anyhow::anyhow!("clash-verge-service binary not found"));
     }
+    let service_binary_path = service_binary_path.to_str().unwrap();
 
-    // Check service status
+    let init = get_init_system();
+    if init.is_none() {
+        return Err(anyhow::anyhow!("Failed to detect init system"));
+    }
+    let init = init.unwrap();
+
+    match init {
+        InitSystem::Systemd => systemd_install(service_binary_path, debug),
+        InitSystem::OpenRC => openrc_install(service_binary_path, debug),
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn systemd_install<S: AsRef<str>>(service_binary_path: S, debug: bool) -> Result<(), Error> {
+    use clash_verge_service::utils::run_command;
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::Path;
+
     let status_output = std::process::Command::new("systemctl")
-        .args(&["status", &format!("{}.service", SERVICE_NAME), "--no-pager"])
+        .args(["status", &format!("{}.service", SERVICE_NAME), "--no-pager"])
         .output()
         .map_err(|e| anyhow::anyhow!("Failed to check service status: {}", e))?;
 
     match status_output.status.code() {
         Some(0) => return Ok(()), // Service is running
         Some(1) | Some(2) | Some(3) => {
-            let _ = run_command(
+            run_command(
                 "systemctl",
                 &["start", &format!("{}.service", SERVICE_NAME)],
                 debug,
@@ -124,7 +143,7 @@ fn main() -> Result<(), Error> {
 
     let unit_file_content = format!(
         include_str!("files/systemd_service_unit.tmpl"),
-        service_binary_path.to_str().unwrap()
+        service_binary_path.as_ref()
     );
 
     File::create(unit_file)
@@ -134,6 +153,52 @@ fn main() -> Result<(), Error> {
     // Reload and start service
     let _ = run_command("systemctl", &["daemon-reload"], debug);
     let _ = run_command("systemctl", &["enable", SERVICE_NAME, "--now"], debug);
+
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn openrc_install<S: AsRef<str>>(service_binary_path: S, debug: bool) -> Result<(), Error> {
+    use clash_verge_service::utils::run_command;
+    use std::fs::{self, File};
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
+
+    let status_output = std::process::Command::new("rc-service")
+        .args(["-e", SERVICE_NAME])
+        .output()
+        .map_err(|e| anyhow::anyhow!("Failed to check service status: {}", e))?;
+
+    match status_output.status.code() {
+        Some(0) => {
+            run_command("rc-service", &[SERVICE_NAME, "--ifstopped", "start"], debug)?;
+            return Ok(());
+        }
+        Some(1) => {} // Service not found, continue with installation
+        _ => return Err(anyhow::anyhow!("Unexpected openrc status code")),
+    }
+
+    // Create and write unit file
+    let unit_file = format!("/etc/init.d/{}", SERVICE_NAME);
+    let unit_file = Path::new(&unit_file);
+
+    let unit_file_content = include_str!("files/openrc_service_unit.tmpl");
+    let unit_file_content =
+        unit_file_content.replace("{SERVICE-BIN}", service_binary_path.as_ref());
+
+    File::create(unit_file)
+        .and_then(|mut file| file.write_all(unit_file_content.as_bytes()))
+        .map_err(|e| anyhow::anyhow!("Failed to write unit file: {}", e))?;
+
+    let mut perms = fs::metadata(unit_file)?.permissions();
+    perms.set_mode(0o755);
+    fs::set_permissions(unit_file, perms)
+        .map_err(|e| anyhow::anyhow!("Failed to set permission: {}", e))?;
+
+    // Reload and start service
+    let _ = run_command("rc-update", &["add", SERVICE_NAME], debug);
+    let _ = run_command("rc-service", &[SERVICE_NAME, "start"], debug);
 
     Ok(())
 }

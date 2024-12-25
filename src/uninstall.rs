@@ -43,12 +43,30 @@ fn main() -> Result<(), Error> {
 }
 
 #[cfg(target_os = "linux")]
+const SERVICE_NAME: &str = "clash-verge-service";
+
+#[cfg(target_os = "linux")]
 fn main() -> Result<(), Error> {
-    use clash_verge_service::utils::run_command;
-    const SERVICE_NAME: &str = "clash-verge-service";
+    use clash_verge_service::{utils::get_init_system, InitSystem};
     use std::env;
 
     let debug = env::args().any(|arg| arg == "--debug");
+
+    let init = get_init_system();
+    if init.is_none() {
+        return Err(anyhow::anyhow!("Failed to detect init system"));
+    }
+    let init = init.unwrap();
+
+    match init {
+        InitSystem::Systemd => systemd_uninstall(debug),
+        InitSystem::OpenRC => openrc_uninstall(debug),
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn systemd_uninstall(debug: bool) -> Result<(), Error> {
+    use clash_verge_service::utils::run_command;
 
     // Stop and disable service
     let _ = run_command(
@@ -71,6 +89,24 @@ fn main() -> Result<(), Error> {
 
     // Reload systemd
     let _ = run_command("systemctl", &["daemon-reload"], debug);
+
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn openrc_uninstall(debug: bool) -> Result<(), Error> {
+    use clash_verge_service::utils::run_command;
+
+    // Stop and disable service
+    let _ = run_command("rc-service", &[SERVICE_NAME, "stop"], debug);
+    let _ = run_command("rc-update", &["del", SERVICE_NAME], debug);
+
+    // Remove service file
+    let unit_file = format!("/etc/init.d/{}", SERVICE_NAME);
+    if std::path::Path::new(&unit_file).exists() {
+        std::fs::remove_file(&unit_file)
+            .map_err(|e| anyhow::anyhow!("Failed to remove service file: {}", e))?;
+    }
 
     Ok(())
 }
