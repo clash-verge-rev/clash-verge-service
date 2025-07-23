@@ -3,12 +3,12 @@ use super::{
     process,
 };
 use anyhow::{anyhow, Context, Result};
+use log::{error, info};
 use once_cell::sync::Lazy;
 use std::{
-    sync::{atomic::Ordering, Arc, Mutex},
     fs::File,
+    sync::{atomic::Ordering, Arc, Mutex},
 };
-use log::{info, error};
 
 impl CoreManager {
     pub fn new() -> Self {
@@ -38,8 +38,10 @@ impl CoreManager {
         let config_file = config.config_file.as_str();
         let args = vec!["-d", config_dir, "-f", config_file, "-t"];
 
-        info!("正在测试配置文件: bin_path: {}, config_dir: {}, config_file: {}", 
-            bin_path, config_dir, config_file);
+        info!(
+            "正在测试配置文件: bin_path: {}, config_dir: {}, config_file: {}",
+            bin_path, config_dir, config_file
+        );
 
         let result = process::spawn_process_debug(bin_path, &args)
             .map_err(|e| format!("Failed to execute config test: {}", e))?;
@@ -70,7 +72,7 @@ impl CoreManager {
     pub fn get_version(&self) -> Result<VersionResponse> {
         let current_pid = std::process::id() as i32;
         info!("服务当前PID: {}", current_pid);
-        
+
         Ok(VersionResponse {
             service: "Clash Verge Service".into(),
             version: env!("CARGO_PKG_VERSION").into(),
@@ -98,7 +100,7 @@ impl CoreManager {
 
         // 确保先停止已运行的mihomo进程
         let _ = self.stop_mihomo();
-        
+
         // 停止系统中其他可能运行的verge-mihomo进程
         self.stop_other_mihomo_processes()?;
 
@@ -123,7 +125,10 @@ impl CoreManager {
         let log_file = config.log_file.as_str();
         let args = vec!["-d", config_dir, "-f", config_file];
 
-        info!("正在启动mihomo: {} -d {} -f {}", bin_path, config_dir, config_file);
+        info!(
+            "正在启动mihomo: {} -d {} -f {}",
+            bin_path, config_dir, config_file
+        );
 
         // Open log file
         let log = File::options()
@@ -137,9 +142,11 @@ impl CoreManager {
 
         // Update mihomo status
         let mihomo_status = self.mihomo_status.inner.lock().unwrap();
-        mihomo_status.running_pid.store(pid as i32, Ordering::Relaxed);
+        mihomo_status
+            .running_pid
+            .store(pid as i32, Ordering::Relaxed);
         mihomo_status.is_running.store(true, Ordering::Relaxed);
-        
+
         info!("Mihomo启动成功，PID: {}", pid);
         Ok(())
     }
@@ -148,7 +155,7 @@ impl CoreManager {
         // 获取mihomo状态信息
         let mihomo_status = self.mihomo_status.inner.lock().unwrap();
         let mihomo_pid = mihomo_status.running_pid.load(Ordering::Relaxed);
-        
+
         if mihomo_pid <= 0 {
             info!("未找到运行中的mihomo进程");
             return Ok(());
@@ -162,7 +169,7 @@ impl CoreManager {
         // 无论终止结果如何，都更新状态
         mihomo_status.running_pid.store(-1, Ordering::Relaxed);
         mihomo_status.is_running.store(false, Ordering::Relaxed);
-        
+
         // 记录结果
         match result {
             Ok(_) => {
@@ -172,7 +179,7 @@ impl CoreManager {
                 error!("终止Mihomo进程时出错: {}", e);
             }
         }
-        
+
         Ok(())
     }
 
@@ -193,15 +200,18 @@ impl CoreManager {
             error!("查找verge-mihomo进程出错: {}", e);
             return Ok(());
         }
-        
+
         let pids = process_result.unwrap();
         if pids.is_empty() {
             return Ok(());
         }
-        
+
         // 过滤并终止进程
-        let kill_count = pids.into_iter()
-            .filter(|&pid| pid != current_pid && (tracked_mihomo_pid <= 0 || pid != tracked_mihomo_pid))
+        let kill_count = pids
+            .into_iter()
+            .filter(|&pid| {
+                pid != current_pid && (tracked_mihomo_pid <= 0 || pid != tracked_mihomo_pid)
+            })
             .map(|pid| {
                 info!("正在停止其他verge-mihomo进程: {}", pid);
                 match process::kill_process(pid) {
@@ -214,11 +224,11 @@ impl CoreManager {
             })
             .filter(|&success| success)
             .count();
-            
-        if kill_count > 0 {    
+
+        if kill_count > 0 {
             info!("已停止 {} 个verge-mihomo进程", kill_count);
         }
-        
+
         Ok(())
     }
 
@@ -234,13 +244,13 @@ impl CoreManager {
 
         // 不管mihomo当前状态如何，确保先停止所有实例，然后重新启动
         let _ = self.stop_mihomo();
-        
+
         // 启动mihomo
         if let Err(e) = self.start_mihomo() {
             error!("启动mihomo失败: {}", e);
             return Err(format!("Failed to start mihomo: {}", e));
         }
-        
+
         // 获取mihomo的PID并更新clash状态
         let mihomo_pid = self
             .mihomo_status
@@ -249,7 +259,7 @@ impl CoreManager {
             .unwrap()
             .running_pid
             .load(Ordering::Relaxed);
-            
+
         if mihomo_pid > 0 {
             // 将mihomo的PID同时记录为clash的PID
             self.clash_status
@@ -275,10 +285,10 @@ impl CoreManager {
 
     pub fn stop_clash(&self) -> Result<()> {
         info!("正在停止Clash");
-        
+
         // 停止mihomo进程(实际上这就是clash使用的进程)
         let _ = self.stop_mihomo();
-        
+
         // 确保所有其他verge-mihomo进程也被停止
         let _ = self.stop_other_mihomo_processes();
 

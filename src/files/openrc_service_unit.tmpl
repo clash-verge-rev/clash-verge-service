@@ -1,0 +1,20 @@
+#!/sbin/openrc-run
+
+command="{SERVICE-BIN}"
+command_user="root:root"
+command_background="yes"
+
+# rc_ulimit="${CLASH_VERGE_ULIMIT:--u 512 -n 1048576}"
+
+pidfile="/run/${RCNAME}.pid"
+output_log="/var/log/${RCNAME}.log"
+error_log="/var/log/${RCNAME}.log"
+
+depend() {
+    need net
+    after bootmisc local
+}
+
+start_pre() {
+    checkpath -f -m 0644 "$output_log"
+}

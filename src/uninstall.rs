@@ -11,8 +11,7 @@ use anyhow::Error;
 #[cfg(target_os = "macos")]
 fn main() -> Result<(), Error> {
     use clash_verge_service::utils::{run_command, uninstall_old_service};
-    use std::env;
-    use std::path::Path;
+    use std::{env, path::Path};
 
     let debug = env::args().any(|arg| arg == "--debug");
 
@@ -50,33 +49,16 @@ fn main() -> Result<(), Error> {
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Error> {
-    use clash_verge_service::utils::run_command;
-    const SERVICE_NAME: &str = "clash-verge-service";
-    use std::env;
+    use clash_verge_service::installer::linux::prelude::*;
 
-    let debug = env::args().any(|arg| arg == "--debug");
+    let debug = std::env::args().any(|arg| arg == "--debug");
 
-    // Stop and disable service
-    let _ = run_command(
-        "systemctl",
-        &["stop", &format!("{}.service", SERVICE_NAME)],
-        debug,
-    );
-    let _ = run_command(
-        "systemctl",
-        &["disable", &format!("{}.service", SERVICE_NAME)],
-        debug,
-    );
+    let init = detect_init_system(debug)?;
 
-    // Remove service file
-    let unit_file = format!("/etc/systemd/system/{}.service", SERVICE_NAME);
-    if std::path::Path::new(&unit_file).exists() {
-        std::fs::remove_file(&unit_file)
-            .map_err(|e| anyhow::anyhow!("Failed to remove service file: {}", e))?;
+    match init.check_status()? {
+        ServiceStatus::NotFound => {}
+        ServiceStatus::Inactive | ServiceStatus::Running => init.uninstall()?,
     }
-
-    // Reload systemd
-    let _ = run_command("systemctl", &["daemon-reload"], debug);
 
     Ok(())
 }
