@@ -65,9 +65,9 @@ pub fn uninstall_old_service() -> Result<(), Error> {
     let plist_file = "/Library/LaunchDaemons/io.github.clashverge.helper.plist";
 
     // Stop and unload service
-    let _ = run_command("launchctl", &["stop", "io.github.clashverge.helper"], false);
-    let _ = run_command("launchctl", &["bootout", "system", plist_file], false);
-    let _ = run_command(
+    run_command("launchctl", &["stop", "io.github.clashverge.helper"], false)?;
+    run_command("launchctl", &["bootout", "system", plist_file], false)?;
+    run_command(
         "launchctl",
         &["disable", "system/io.github.clashverge.helper"],
         false,

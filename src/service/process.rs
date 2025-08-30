@@ -204,7 +204,7 @@ pub fn kill_process(pid: u32) -> io::Result<()> {
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
         let check_process = Command::new("ps")
-            .args(&["-p", &pid.to_string()])
+            .args(["-p", &pid.to_string()])
             .output()?;
             
         if !check_process.status.success() {
@@ -231,8 +231,7 @@ pub fn kill_process(pid: u32) -> io::Result<()> {
         Ok(())
     } else {
         error!("使用 SIGKILL 终止进程 PID {} 失败: {}", pid, stderr.trim());
-        Err(io::Error::new(
-            io::ErrorKind::Other,
+        Err(io::Error::other(
             format!("Kill command failed: {}", stderr.trim()),
         ))
     }

@@ -201,7 +201,7 @@ impl CoreManager {
         
         // 过滤并终止进程
         let kill_count = pids.into_iter()
-            .filter(|&pid| pid != current_pid && (tracked_mihomo_pid <= 0 || pid != tracked_mihomo_pid))
+            .filter(|&pid| pid != current_pid && (tracked_mihomo_pid <= 1 || pid != tracked_mihomo_pid))
             .map(|pid| {
                 info!("正在停止其他verge-mihomo进程: {}", pid);
                 match process::kill_process(pid) {
