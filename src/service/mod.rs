@@ -1,11 +1,11 @@
 mod core;
 mod data;
-mod process;
 mod ipc;
+mod process;
 
 use self::ipc::run_ipc_server;
+use log::{error, info};
 use tokio::runtime::Runtime;
-use log::{info, error};
 
 #[cfg(target_os = "macos")]
 use clash_verge_service::utils;
@@ -52,7 +52,7 @@ pub async fn run_service() -> anyhow::Result<()> {
     })?;
 
     info!("启动Clash Verge服务 - IPC模式");
-    
+
     // 直接运行IPC服务器
     if let Err(err) = run_ipc_server().await {
         error!("IPC服务器错误: {}", err);

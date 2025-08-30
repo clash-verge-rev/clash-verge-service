@@ -11,9 +11,7 @@ use anyhow::Error;
 #[cfg(target_os = "macos")]
 fn main() -> Result<(), Error> {
     use clash_verge_service::utils::{run_command, uninstall_old_service};
-    use std::fs::File;
-    use std::io::Write;
-    use std::path::Path;
+    use std::{fs::File, io::Write, path::Path};
 
     let debug = env::args().any(|arg| arg == "--debug");
     let _ = uninstall_old_service();
@@ -113,58 +111,17 @@ fn main() -> Result<(), Error> {
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<(), Error> {
-    const SERVICE_NAME: &str = "clash-verge-service";
-    use clash_verge_service::utils::run_command;
-    use std::fs::File;
-    use std::io::Write;
-    use std::path::Path;
+    use clash_verge_service::installer::linux::prelude::*;
 
     let debug = env::args().any(|arg| arg == "--debug");
 
-    let service_binary_path = env::current_exe()
-        .unwrap()
-        .with_file_name("clash-verge-service");
+    let init = detect_init_system(debug)?;
 
-    if !service_binary_path.exists() {
-        return Err(anyhow::anyhow!("clash-verge-service binary not found"));
+    match init.check_status()? {
+        ServiceStatus::NotFound => init.install()?,
+        ServiceStatus::Inactive => init.run(),
+        ServiceStatus::Running => {}
     }
-
-    // Check service status
-    let status_output = std::process::Command::new("systemctl")
-        .args(&["status", &format!("{}.service", SERVICE_NAME), "--no-pager"])
-        .output()
-        .map_err(|e| anyhow::anyhow!("Failed to check service status: {}", e))?;
-
-    match status_output.status.code() {
-        Some(0) => return Ok(()), // Service is running
-        Some(1) | Some(2) | Some(3) => {
-            let _ = run_command(
-                "systemctl",
-                &["start", &format!("{}.service", SERVICE_NAME)],
-                debug,
-            )?;
-            return Ok(());
-        }
-        Some(4) => {} // Service not found, continue with installation
-        _ => return Err(anyhow::anyhow!("Unexpected systemctl status code")),
-    }
-
-    // Create and write unit file
-    let unit_file = format!("/etc/systemd/system/{}.service", SERVICE_NAME);
-    let unit_file = Path::new(&unit_file);
-
-    let unit_file_content = format!(
-        include_str!("files/systemd_service_unit.tmpl"),
-        service_binary_path.to_str().unwrap()
-    );
-
-    File::create(unit_file)
-        .and_then(|mut file| file.write_all(unit_file_content.as_bytes()))
-        .map_err(|e| anyhow::anyhow!("Failed to write unit file: {}", e))?;
-
-    // Reload and start service
-    let _ = run_command("systemctl", &["daemon-reload"], debug);
-    let _ = run_command("systemctl", &["enable", SERVICE_NAME, "--now"], debug);
 
     Ok(())
 }
