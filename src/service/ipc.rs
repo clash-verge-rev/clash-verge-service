@@ -1,7 +1,6 @@
 use crate::service::data::*;
 use crate::service::core::COREMANAGER;
 use anyhow::{anyhow, Context, Result};
-use clash_verge_service::dirs;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -211,8 +210,6 @@ pub fn handle_request(request: IpcRequest) -> Result<IpcResponse> {
         }
         
         IpcCommand::StartClash => {
-            let _ = dirs::clean_ipc_path();
-
             let start_body: StartBody = match serde_json::from_value(request.payload) {
                 Ok(body) => body,
                 Err(err) => {
@@ -251,11 +248,9 @@ pub fn handle_request(request: IpcRequest) -> Result<IpcResponse> {
                         "code": 0,
                         "msg": "ok"
                     });
-                    let _ = dirs::clean_ipc_path();
                     create_signed_response(&request.id, true, Some(json_response), None)
                 }
                 Err(err) => {
-                    let _ = dirs::clean_ipc_path();
                     create_signed_response(
                         &request.id, 
                         false, 
