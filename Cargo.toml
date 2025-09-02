@@ -28,7 +28,7 @@ parking_lot = "0.12"
 windows-service = "0.8.0"
 tokio = { version = "1.45.0", features = ["full"] }
 serde = { version = "1.0.217", features = ["derive"] }
-sysinfo = "0.35.1"
+sysinfo = "0.37.0"
 libc = "0.2.172"
 hmac = "0.12.1"
 sha2 = "0.10.9"
