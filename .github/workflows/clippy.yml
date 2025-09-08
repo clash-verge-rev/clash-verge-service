@@ -1,0 +1,169 @@
+name: Clippy Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      clippy_level:
+        description: 'Clippy check level'
+        required: true
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - pedantic
+          - nursery
+          - all
+      fail_on_warnings:
+        description: 'Fail on clippy warnings'
+        required: true
+        default: false
+        type: boolean
+
+permissions: read-all
+
+jobs:
+  clippy:
+    name: Clippy Check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-pc-windows-msvc
+          - aarch64-apple-darwin
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Setup Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy-${{ matrix.target }}
+
+      - name: Install cross-compilation dependencies
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64
+
+      - name: Run clippy (default)
+        if: inputs.clippy_level == 'default'
+        run: |
+          echo "Running clippy with default settings..."
+          if [ "${{ inputs.fail_on_warnings }}" = "true" ]; then
+            cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -D warnings
+          else
+            cargo clippy --target ${{ matrix.target }} --all-targets --all-features
+          fi
+
+      - name: Run clippy (pedantic)
+        if: inputs.clippy_level == 'pedantic'
+        run: |
+          echo "Running clippy with pedantic lints..."
+          if [ "${{ inputs.fail_on_warnings }}" = "true" ]; then
+            cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -W clippy::pedantic -D warnings
+          else
+            cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -W clippy::pedantic
+          fi
+
+      - name: Run clippy (nursery)
+        if: inputs.clippy_level == 'nursery'
+        run: |
+          echo "Running clippy with nursery lints..."
+          if [ "${{ inputs.fail_on_warnings }}" = "true" ]; then
+            cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -W clippy::nursery -D warnings
+          else
+            cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -W clippy::nursery
+          fi
+
+      - name: Run clippy (all)
+        if: inputs.clippy_level == 'all'
+        run: |
+          echo "Running clippy with all available lints..."
+          if [ "${{ inputs.fail_on_warnings }}" = "true" ]; then
+            cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -W clippy::all -W clippy::pedantic -W clippy::nursery -A clippy::missing_docs_in_private_items -D warnings
+          else
+            cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -W clippy::all -W clippy::pedantic -W clippy::nursery -A clippy::missing_docs_in_private_items
+          fi
+
+      - name: Generate clippy report
+        if: always()
+        run: |
+          echo "## Clippy Report for ${{ matrix.target }}" >> clippy_report.md
+          echo "**Level**: ${{ inputs.clippy_level }}" >> clippy_report.md
+          echo "**Fail on warnings**: ${{ inputs.fail_on_warnings }}" >> clippy_report.md
+          echo "**Target**: ${{ matrix.target }}" >> clippy_report.md
+          echo "" >> clippy_report.md
+          
+          # 运行clippy并捕获输出
+          case "${{ inputs.clippy_level }}" in
+            "default")
+              cargo clippy --target ${{ matrix.target }} --all-targets --all-features --message-format=json 2>&1 | grep -E '"level":"warning"|"level":"error"' | head -20 >> clippy_output.json || true
+              ;;
+            "pedantic")
+              cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -W clippy::pedantic --message-format=json 2>&1 | grep -E '"level":"warning"|"level":"error"' | head -20 >> clippy_output.json || true
+              ;;
+            "nursery")
+              cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -W clippy::nursery --message-format=json 2>&1 | grep -E '"level":"warning"|"level":"error"' | head -20 >> clippy_output.json || true
+              ;;
+            "all")
+              cargo clippy --target ${{ matrix.target }} --all-targets --all-features -- -W clippy::all -W clippy::pedantic -W clippy::nursery -A clippy::missing_docs_in_private_items --message-format=json 2>&1 | grep -E '"level":"warning"|"level":"error"' | head -20 >> clippy_output.json || true
+              ;;
+          esac
+          
+          if [ -f clippy_output.json ] && [ -s clippy_output.json ]; then
+            echo "### Issues found:" >> clippy_report.md
+            echo '```json' >> clippy_report.md
+            cat clippy_output.json >> clippy_report.md
+            echo '```' >> clippy_report.md
+          else
+            echo "### ✅ No issues found!" >> clippy_report.md
+          fi
+
+      - name: Upload clippy report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clippy-report-${{ matrix.target }}
+          path: clippy_report.md
+          retention-days: 30
+
+  summary:
+    name: Clippy Summary
+    runs-on: ubuntu-latest
+    needs: clippy
+    if: always()
+    steps:
+      - name: Download all reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: clippy-report-*
+          merge-multiple: true
+
+      - name: Generate summary
+        run: |
+          echo "# 🔍 Clippy Check Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Check Level**: ${{ inputs.clippy_level }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Fail on Warnings**: ${{ inputs.fail_on_warnings }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          for report in clippy_report.md clippy-report-*.md; do
+            if [ -f "$report" ]; then
+              echo "## Report: $report" >> $GITHUB_STEP_SUMMARY
+              cat "$report" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+          
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "*Generated on $(date)*" >> $GITHUB_STEP_SUMMARY
